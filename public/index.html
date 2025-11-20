@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Chat Tester — Static Users</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+    :root {
+      --bg:#0f172a; --panel:#111827; --muted:#9ca3af; --fg:#e5e7eb;
+      --accent:#22c55e; --link:#60a5fa; --line:#1f2937; --chip:#0b1220;
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; background:var(--bg); color:var(--fg); }
+    header { padding:12px 16px; border-bottom:1px solid var(--line); display:flex; gap:10px; align-items:center; }
+    header input, header button { padding:8px 10px; background:var(--chip); color:var(--fg); border:1px solid var(--line); border-radius:8px; }
+    header .ok { background:#0b1f16; border-color:#134e4a; }
+    header .status { color:var(--muted); font-size:12px; }
+    main { display:grid; grid-template-columns: 360px 1fr 420px; gap:12px; padding:12px; }
+    section { background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; display:flex; flex-direction:column; min-height:200px; }
+    section h3 { margin:0; padding:10px 12px; border-bottom:1px solid var(--line); color:#a7f3d0; font-weight:600; background:#0b1220; }
+    .content { padding:10px; display:grid; gap:10px; }
+    .row { display:grid; grid-template-columns: 110px 1fr auto; gap:8px; align-items:center; }
+    .row label { color:var(--muted); font-size:13px; }
+    .row input, .row select, .row button { width:100%; padding:8px 10px; background:var(--chip); color:var(--fg); border:1px solid var(--line); border-radius:8px; }
+    .row button { cursor:pointer; }
+    .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
+    .hr { height:1px; background:var(--line); margin:6px 0; }
+    .flex { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .pill {
+      display:inline-flex; gap:6px; align-items:center; padding:6px 12px;
+      border:1px solid var(--line); border-radius:999px; background:var(--chip);
+      cursor:pointer; -webkit-appearance:none; appearance:none;
+      color:var(--fg) !important; font-weight:600; line-height:1.1;
+      min-width:92px; justify-content:center;
+    }
+    .pill.active { outline:2px solid var(--accent); }
+    .small { color:var(--muted); font-size:12px; }
+
+    /* Rooms */
+    .rooms { display:flex; flex-direction:column; height:520px; }
+    .rooms-list { flex:1; overflow:auto; padding:8px; display:grid; gap:6px; }
+    .room { border:1px solid var(--line); border-radius:8px; padding:8px; background:#0b1220; cursor:pointer; }
+    .room.active { outline:2px solid var(--link); }
+    .room .id { color:#93c5fd; font-size:12px; }
+    .room .name { font-weight:600; }
+
+    /* Chat */
+    .chat { display:flex; flex-direction:column; height:520px; }
+    .messages { flex:1; overflow:auto; padding:10px; display:grid; gap:6px; background:#0b1220; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+    .msg { padding:8px; border:1px solid var(--line); border-radius:10px; background:#0f1b30; }
+    .msg.mine { background:#0e2a1f; }
+    .msg .meta { font-size:12px; color:#a7f3d0; display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+    .msg .mid { color:#60a5fa; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .msg .body { margin-top:4px; white-space: pre-wrap; word-wrap: break-word; }
+    .msg .readpill { padding:2px 8px; border-radius:999px; border:1px solid var(--line); background:#0e1b2c; color:#a7f3d0; }
+
+    /* Log */
+    .logs { height: 520px; overflow:auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; background:#0b1220; padding:8px; border-top:1px solid var(--line); }
+    .line { white-space: pre-wrap; word-break: break-word; margin:0; padding:2px 0; }
+    .ev { color:#93c5fd; }
+    .emit { color:#a7f3d0; }
+    .err { color:#fca5a5; }
+    .sys { color:#fef08a; }
+  </style>
+</head>
+<body>
+
+<header>
+  <label class="small">Server URL</label>
+  <input id="serverUrl" value="http://localhost:8080" style="min-width:320px" />
+  <button id="btnConnect" class="ok">Connect</button>
+  <div id="status" class="status">disconnected</div>
+</header>
+
+<main>
+  <!-- Left: identity & rooms -->
+  <section>
+    <h3>Identity & Rooms</h3>
+    <div class="content">
+      <div class="flex" id="userPills"></div>
+
+      <div class="row">
+        <label>Your row_id</label>
+        <input id="rowId" readonly />
+        <button id="btnResetIds">Reset IDs</button>
+      </div>
+
+      <div class="row">
+        <label>Project ID</label>
+        <input id="projectId" />
+        <span></span>
+      </div>
+
+      <div class="grid2">
+        <button id="btnConnected" title="Re-identify / re-send connected">connected (init)</button>
+        <button id="btnRoomsList">pull rooms</button>
+      </div>
+
+      <div class="hr"></div>
+
+      <div class="rooms">
+        <div class="rooms-list" id="roomsList"></div>
+        <div class="content">
+          <div class="row">
+            <label>Peer (DM)</label>
+            <select id="peerSelect"></select>
+            <button id="btnCreateDM">Create DM</button>
+          </div>
+
+          <!-- NEW: Static group creation -->
+          <div class="row">
+            <label>Create Group</label>
+            <span></span>
+            <button id="btnCreateStaticGroup">Static group</button>
+          </div>
+
+          <div class="row">
+            <label>Join Room</label>
+            <input id="joinRoomId" placeholder="room_id" />
+            <button id="btnJoinRoom">Join</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Middle: chat -->
+  <section>
+    <h3>Chat</h3>
+    <div class="content chat">
+      <div class="small">Active room: <span id="activeRoomLabel">—</span></div>
+      <div class="messages" id="messages"></div>
+      <div class="content">
+        <div class="row">
+          <label>Message</label>
+          <input id="msgInput" placeholder="Type and send" />
+          <button id="btnSendMsg">Send</button>
+        </div>
+        <div class="row">
+          <label>Message ID</label>
+          <input id="manualMsgId" placeholder="message_id to mark read" />
+          <button id="btnMarkRead">Mark Read</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Right: event log -->
+  <section>
+    <h3>Event Log</h3>
+    <div class="logs" id="logs"></div>
+  </section>
+</main>
+
+<script>
+  // ---------- helpers ----------
+  const el = (id) => document.getElementById(id);
+  const logs = el('logs');
+
+  function log(kind, title, payload) {
+    const line = document.createElement('div');
+    line.className = 'line ' + (kind || '');
+    const ts = new Date().toLocaleTimeString();
+    const body = payload !== undefined ? (typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2)) : '';
+    line.textContent = `[${ts}] ${title} ${body && '\n' + body}`;
+    logs.appendChild(line);
+    logs.scrollTop = logs.scrollHeight;
+  }
+
+  function required(v, name) {
+    if (!v) throw new Error(`${name} is required`);
+    return v;
+  }
+
+  // ---------- users (STATIC UUIDs) ----------
+  const STATIC_IDS = {
+    Athos:   '11111111-1111-1111-1111-111111111111',
+    Porthos: '22222222-2222-2222-2222-222222222222',
+    Aramis:  '33333333-3333-3333-3333-333333333333',
+  };
+
+  const users = {
+    Athos:   { name: 'Athos',   row_id: STATIC_IDS.Athos },
+    Porthos: { name: 'Porthos', row_id: STATIC_IDS.Porthos },
+    Aramis:  { name: 'Aramis',  row_id: STATIC_IDS.Aramis },
+  };
+
+  let activeUser = 'Athos';
+  let socket = null;
+  let heartbeatTimer = null;
+
+  // client state
+  const state = {
+    rooms: new Map(),          // room_id -> room
+    currentRoomId: null,
+    messages: new Map(),       // room_id -> [messages]
+    readSent: new Set(),       // message_ids already emitted
+  };
+
+  // ---------- socket ----------
+  function connect() {
+    const url = el('serverUrl').value || 'http://localhost:8080';
+    if (socket?.connected) socket.disconnect();
+    socket = io(url, {
+      transports: ['websocket'],
+      reconnection: true,
+      reconnectionDelay: 500,
+      reconnectionAttempts: Infinity
+    });
+
+    socket.on('connect', () => {
+      log('sys', 'socket connected', { id: socket.id });
+      el('status').textContent = 'connected: ' + socket.id;
+      // AUTO: identify right away & start heartbeat
+      doConnected();
+    });
+
+    socket.on('disconnect', (reason) => {
+      log('sys', 'socket disconnected', { reason });
+      el('status').textContent = 'disconnected';
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    });
+
+    // server events
+    socket.on('rooms list', (rooms) => {
+      log('ev', 'rooms list', rooms);
+      renderRooms(rooms || []);
+    });
+    socket.on('room history', (msgs) => {
+      log('ev', 'room history', msgs);
+      const rid = state.currentRoomId;
+      if (!rid) return;
+      state.messages.set(rid, Array.isArray(msgs) ? msgs : []);
+      renderMessages();
+      markAllVisibleAsRead(); // auto-mark on load
+    });
+    socket.on('chat message', (msg) => {
+      log('ev', 'chat message', msg);
+      const rid = msg?.room_id || msg?.RoomId;
+      if (!rid) return;
+      const arr = state.messages.get(rid) || [];
+      arr.push(msg);
+      state.messages.set(rid, arr);
+      if (state.currentRoomId === rid) {
+        appendMessage(msg);
+        tryMarkRead(msg); // auto-mark new arrival
+      }
+    });
+    socket.on('check room', (id) => {
+      log('ev', 'check room', { id });
+      const me = users[activeUser];
+      emit('join room', { room_id: id, row_id: me.row_id, to_name: peerNameFor(me.name), offset: 0, limit: 50 });
+      el('joinRoomId').value = id;
+    });
+    socket.on('presence.updated', (p) => log('ev', 'presence.updated', p));
+    socket.on('presence.result', (p) => log('ev', 'presence.result', p));
+    socket.on('message.read', (p) => log('ev', 'message.read', p));
+    socket.on('room.updated', (p) => log('ev', 'room.updated', p));
+    socket.on('error', (e) => log('err', 'error', e));
+  }
+
+  function emit(ev, payload) {
+    log('emit', 'emit ' + ev, payload);
+    socket.emit(ev, payload);
+  }
+
+  // ---------- identity UI ----------
+  function renderUserPills() {
+    const box = el('userPills');
+    box.innerHTML = '';
+    Object.values(users).forEach(u => {
+      const pill = document.createElement('button');
+      pill.className = 'pill' + (u.name === activeUser ? ' active' : '');
+      pill.textContent = `${u.name}`;
+      pill.addEventListener('click', () => {
+        activeUser = u.name;
+        renderUserPills();
+        el('rowId').value = users[activeUser].row_id;
+      });
+      box.appendChild(pill);
+    });
+    el('rowId').value = users[activeUser].row_id;
+
+    // peers dropdown
+    const peerSel = el('peerSelect');
+    peerSel.innerHTML = '';
+    Object.values(users).forEach(u => {
+      if (u.name === activeUser) return;
+      const opt = document.createElement('option');
+      opt.value = u.name;
+      opt.textContent = `${u.name}`;
+      peerSel.appendChild(opt);
+    });
+  }
+
+  function resetIds() {
+    users.Athos.row_id = STATIC_IDS.Athos;
+    users.Porthos.row_id = STATIC_IDS.Porthos;
+    users.Aramis.row_id  = STATIC_IDS.Aramis;
+    renderUserPills();
+  }
+
+  function peerNameFor(myName) {
+    const sel = el('peerSelect').value;
+    return sel || (myName === 'Athos' ? 'Porthos' : 'Athos');
+  }
+
+  // ---------- rooms ----------
+  function renderRooms(rooms) {
+    state.rooms.clear();
+    const list = el('roomsList');
+    list.innerHTML = '';
+    (rooms || []).forEach(r => {
+      const id = r.id || r.Id || r.room_id || r.RoomId;
+      if (!id) return;
+      state.rooms.set(id, r);
+      const div = document.createElement('div');
+      div.className = 'room' + (state.currentRoomId === id ? ' active' : '');
+      const name = r.name || r.to_name || r.ToName || '(room)';
+      div.innerHTML = `
+        <div class="name">${name}</div>
+        <div class="id">${id}</div>
+      `;
+      div.addEventListener('click', () => joinRoom(id, name));
+      list.appendChild(div);
+    });
+  }
+
+  function joinRoom(roomId, label) {
+    const me = users[activeUser];
+    state.currentRoomId = roomId;
+    el('activeRoomLabel').textContent = label ? `${label} — ${roomId}` : roomId;
+    emit('join room', { room_id: roomId, row_id: me.row_id, to_name: label || '', offset: 0, limit: 100 });
+    el('messages').innerHTML = ''; // filled by room history
+  }
+
+  // ---------- chat ----------
+  function renderMessages() {
+    const box = el('messages');
+    box.innerHTML = '';
+    const rid = state.currentRoomId;
+    if (!rid) return;
+    const arr = state.messages.get(rid) || [];
+    arr.forEach(msg => appendMessage(msg));
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function appendMessage(msg) {
+    const box = el('messages');
+    const div = document.createElement('div');
+    const me = users[activeUser];
+
+    const from = msg.from || msg.From || '';
+    const mid  = msg.id || msg.Id || msg.message_id || msg.MessageId;
+    const mine = (from === me.name) || (from === me.row_id); // tolerate either
+    const created = msg.created_at || msg.CreatedAt || '';
+    const body = escapeHtml(msg.message || msg.Message || msg.content || msg.Content || '');
+
+    div.className = 'msg' + (mine ? ' mine' : '');
+    div.innerHTML = `
+      <div class="meta">
+        <span>${mine ? 'You' : (from || 'Other')}</span>
+        ${mid ? `<span class="mid">#${mid}</span>` : ''}
+        ${created ? `<span>${created}</span>` : ''}
+        ${mid ? `<button class="pill readpill" data-mid="${mid}">Mark read</button>` : ''}
+      </div>
+      <div class="body">${body}</div>
+    `;
+    const btn = div.querySelector('button[data-mid]');
+    if (btn && mid) btn.addEventListener('click', () => markRead(mid));
+
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ---------- read logic ----------
+  function markRead(messageId) {
+    const me = users[activeUser];
+    if (!messageId || state.readSent.has(messageId)) return;
+    state.readSent.add(messageId);
+    emit('message:read', { row_id: me.row_id, message_id: messageId });
+  }
+  function tryMarkRead(msg) {
+    const mid = msg?.id || msg?.Id || msg?.message_id || msg?.MessageId;
+    if (!mid) return;
+    markRead(mid);
+  }
+  function markAllVisibleAsRead() {
+    const rid = state.currentRoomId;
+    if (!rid) return;
+    const arr = state.messages.get(rid) || [];
+    arr.forEach(tryMarkRead);
+  }
+
+  // ---------- actions ----------
+  function doConnected() {
+    const me = users[activeUser];
+    emit('connected', { row_id: me.row_id, offset: 0, limit: 50 });
+
+    // heartbeat every 30s
+    if (!heartbeatTimer) {
+      heartbeatTimer = setInterval(() => {
+        emit('presence:ping', { row_id: me.row_id });
+      }, 30000);
+      log('sys', 'presence heartbeat started (30s)');
+    }
+  }
+
+  function pullRooms() {
+    const me = users[activeUser];
+    emit('rooms list', { row_id: me.row_id, offset: 0, limit: 50 });
+  }
+
+  function createDM() {
+    const me = users[activeUser];
+    const peerName = el('peerSelect').value;
+    const peer = users[peerName];
+    const proj = el('projectId').value || 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+
+    emit('create room', {
+      row_id: me.row_id,
+      project_id: proj,
+      type: 'single',
+      to_row_id: peer.row_id,
+      to_name: peer.name,
+      from_name: me.name
+    });
+  }
+
+  // NEW: exact static group payload sender
+  function createStaticGroup() {
+    emit('create room', {
+      "name": "",
+      "type": "group",
+      "row_id": "0102f522-6372-41e2-89b7-109a3d3a0a3b",
+      "item_id": "2cebed90-9fc3-4e90-82e6-11727762dfc5",
+      "from_name": "asdfasdfAA!1",
+      "project_id": "7380859b-8dac-4fe3-b7aa-1fdfcdb4f5c1",
+      "to_name": "#23452345234"
+    });
+  }
+
+  function sendMsg() {
+    const rid = state.currentRoomId || el('joinRoomId').value.trim();
+    const me  = users[activeUser];
+    const text = el('msgInput').value;
+    if (!rid) { alert('Join a room first'); return; }
+
+    // Backend expects "from" = sender NAME (not row_id). We also send author_row_id (ignored if backend doesn't use it).
+    emit('chat message', {
+      room_id: rid,
+      from: me.name,
+      author_row_id: me.row_id,
+      content: text,
+      type: 'text',
+      file: '',
+      parent_id: '7adca5c7-1077-4880-90e0-feb524bfb586'
+    });
+    el('msgInput').value = '';
+  }
+
+  function joinRoomByInput() {
+    const rid = el('joinRoomId').value.trim();
+    if (!rid) return;
+    joinRoom(rid, '(manual)');
+  }
+
+  function markReadManual() {
+    const mid = el('manualMsgId').value.trim();
+    if (!mid) return;
+    markRead(mid);
+  }
+
+  // ---------- wire UI ----------
+  el('btnConnect').addEventListener('click', connect);
+  el('btnConnected').addEventListener('click', doConnected); // manual re-identify if needed
+  el('btnRoomsList').addEventListener('click', pullRooms);
+  el('btnCreateDM').addEventListener('click', createDM);
+  el('btnCreateStaticGroup').addEventListener('click', createStaticGroup); // NEW
+  el('btnSendMsg').addEventListener('click', sendMsg);
+  el('btnJoinRoom').addEventListener('click', joinRoomByInput);
+  el('btnMarkRead').addEventListener('click', markReadManual);
+  el('btnResetIds').addEventListener('click', resetIds);
+
+  // boot
+  (function boot() {
+    renderUserPills();
+    el('projectId').value = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+  })();
+
+  // Re-mark visible messages when tab becomes visible (snappier)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) markAllVisibleAsRead();
+  });
+</script>
+</body>
+</html>
