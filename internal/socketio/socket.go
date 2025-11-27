@@ -112,7 +112,6 @@ func (s *Socket) Rooms() []string {
 func (s *Socket) disconnect() {
 	s.Conn.Close()
 	s.Conn = nil
-	// s.rooms = []string{}
 	if len(s.dispose) > 0 {
 		for _, dispose := range s.dispose {
 			dispose()

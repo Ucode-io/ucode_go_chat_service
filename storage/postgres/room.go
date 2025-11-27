@@ -83,7 +83,7 @@ func (r *postgresRepo) RoomGetSingle(ctx context.Context, req *models.GetSingleR
 func (r *postgresRepo) RoomGetList(ctx context.Context, req *models.GetListRoomReq) (*models.GetListRoomResp, error) {
 	res := &models.GetListRoomResp{}
 
-	sqlStr, args, err := r.Db.Builder.
+	builder := r.Db.Builder.
 		Select(
 			"r.id",
 			"r.name",
@@ -122,8 +122,13 @@ func (r *postgresRepo) RoomGetList(ctx context.Context, req *models.GetListRoomR
 		Where(sq.Eq{"rm.row_id": req.RowId}).
 		OrderBy("r.updated_at DESC").
 		Limit(req.Limit).
-		Offset(req.Offset).
-		ToSql()
+		Offset(req.Offset)
+
+	if req.Type != "" {
+		builder = builder.Where(sq.Eq{"r.type": req.Type})
+	}
+
+	sqlStr, args, err := builder.ToSql()
 	if err != nil {
 		return nil, HandleDatabaseError(err, r.Log, "RoomGetList: build sql")
 	}
@@ -264,10 +269,6 @@ func (r *postgresRepo) RoomExists(ctx context.Context, req *models.ExistsRoom) (
 func (r *postgresRepo) UnreadCountInRoom(ctx context.Context, req *models.UnreadCountReq) (*models.UnreadCountResp, error) {
 	resp := &models.UnreadCountResp{RoomId: req.RoomId, RowId: req.RowId}
 
-	// COUNT messages in room R that are:
-	//  - authored by someone else (author_row_id <> user)
-	//  - created after this user's last_read_at for that room
-	// If the member row or last_read_at is missing -> treat as epoch (count all).
 	sqlStr, args, err := r.Db.Builder.
 		Select("COUNT(*)").
 		From("messages m").

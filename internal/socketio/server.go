@@ -242,8 +242,6 @@ func (s *Io) new() func(ctx *fiber.Ctx) error {
 		for {
 			messageType, message, err := c.ReadMessage()
 			if err != nil {
-				// if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				// }
 				return
 			}
 

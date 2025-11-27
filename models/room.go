@@ -47,6 +47,7 @@ type GetListRoomReq struct {
 	Offset uint64 `json:"offset"`
 	Limit  uint64 `json:"limit"`
 	RowId  string `json:"row_id"`
+	Type   string `json:"type"`
 }
 
 type GetListRoomResp struct {

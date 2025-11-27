@@ -6,7 +6,6 @@ DROP TABLE IF EXISTS "messages";
 
 DROP TABLE IF EXISTS "rooms";
 
--- Enum types (after tables are gone)
 DROP TYPE IF EXISTS presence_status;
 DROP TYPE IF EXISTS message_type;
 DROP TYPE IF EXISTS room_type;

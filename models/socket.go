@@ -2,6 +2,7 @@ package models
 
 type Connection struct {
 	RowId  string `json:"row_id"`
+	Type   string `json:"type"`
 	Offset uint64 `json:"offset"`
 	Limit  uint64 `json:"limit"`
 }
@@ -13,6 +14,7 @@ type Disconnection struct {
 type JoinRoom struct {
 	RoomId  string `json:"room_id"`
 	RowId   string `json:"row_id"`
+	Type    string `json:"type"`
 	ToName  string `json:"to_name"`
 	ToRowId any    `json:"to_row_id"`
 	Offset  uint64 `json:"offset"`
@@ -47,6 +49,7 @@ type UpdateMessage struct {
 
 type RoomsList struct {
 	RowId  string `json:"row_id"`
+	Type   string `json:"type"`
 	Offset uint64 `json:"offset"`
 	Limit  uint64 `json:"limit"`
 }

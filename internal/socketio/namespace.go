@@ -78,16 +78,6 @@ func (n *namespaces) create(name string) *Namespace {
 	return ret
 }
 
-// func (n *namespaces) all() []*Namespace {
-// 	n.RLock()
-// 	ret := make([]*Namespace, 0)
-// 	for _, nps := range n.list {
-// 		ret = append(ret, nps)
-// 	}
-// 	n.RUnlock()
-// 	return ret
-// }
-
 func (n *namespaces) get(name string) *Namespace {
 	n.RLock()
 	defer n.RUnlock()

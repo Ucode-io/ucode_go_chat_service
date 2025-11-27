@@ -81,10 +81,13 @@ func (h *handler) RoomGetList(c *gin.Context) {
 		return
 	}
 
+	typeParam := c.Query("type")
+
 	req := &models.GetListRoomReq{
 		Offset: uint64(offset),
 		Limit:  uint64(limit),
 		RowId:  rowId,
+		Type:   typeParam,
 	}
 
 	rooms, err := h.storage.Postgres().RoomGetList(

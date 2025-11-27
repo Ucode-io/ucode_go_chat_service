@@ -5,8 +5,8 @@ import "sync"
 type AckCallback func(data ...any)
 
 type EventPayload struct {
-	Name   string //event name
-	SID    string //socket id
+	Name   string
+	SID    string
 	Socket *Socket
 	Error  error
 	Data   []any

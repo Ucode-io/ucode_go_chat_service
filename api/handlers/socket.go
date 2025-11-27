@@ -1,314 +1,3 @@
-// package handlers
-
-// import (
-// 	"context"
-// 	"sync"
-// 	"ucode/ucode_go_chat_service/config"
-// 	"ucode/ucode_go_chat_service/internal/socketio"
-// 	"ucode/ucode_go_chat_service/models"
-// 	"ucode/ucode_go_chat_service/pkg/logger"
-// 	"ucode/ucode_go_chat_service/pkg/utils"
-// 	"ucode/ucode_go_chat_service/storage"
-// )
-
-// type socket struct {
-// 	mu      *sync.Mutex
-// 	io      *socketio.Io
-// 	storage storage.StorageI
-// 	log     *logger.Logger
-// }
-
-// func NewSocketHandler(io *socketio.Io, strg storage.StorageI, log *logger.Logger) {
-// 	s := &socket{
-// 		mu:      &sync.Mutex{},
-// 		io:      io,
-// 		storage: strg,
-// 		log:     log,
-// 	}
-
-// 	s.io.OnAuthentication(func(params map[string]string) bool {
-// 		return true
-// 	})
-
-// 	s.io.OnConnection(func(socket *socketio.Socket) {
-// 		socket.On("connected", s.onConnection)
-// 		socket.On("join room", s.onJoinRoom)
-// 		socket.On("chat message", s.onChatMessage)
-// 		socket.On("rooms list", s.onRoomsList)
-// 		socket.On("create room", s.onCreateRoom)
-// 	})
-// }
-// func (s *socket) onConnection(event *socketio.EventPayload) {
-// 	if request, ok := event.Data[0].(map[string]any); ok {
-// 		params := utils.ConvertMaptoStruct[models.Connection](request)
-
-// 		event.Socket.Join(params.RowId)
-
-// 		if params.Limit == 0 || params.Limit > config.DefaultRoomsLimit {
-// 			params.Limit = config.DefaultRoomsLimit
-// 		}
-
-// 		items, err := s.storage.Postgres().RoomGetList(
-// 			context.Background(),
-// 			&models.GetListRoomReq{
-// 				RowId:  params.RowId,
-// 				Offset: params.Offset,
-// 				Limit:  params.Limit,
-// 			},
-// 		)
-// 		if err != nil {
-// 			event.Socket.Emit("error", "Internal server error")
-// 			return
-// 		}
-
-// 		event.Socket.Emit("rooms list", items.Rooms)
-// 	}
-
-// }
-
-// func (s *socket) onJoinRoom(event *socketio.EventPayload) {
-// 	if request, ok := event.Data[0].(map[string]any); ok {
-// 		params := utils.ConvertMaptoStruct[models.JoinRoom](request)
-
-// 		if params.RoomId == "" {
-// 			event.Socket.Emit("error", "Room ID is required")
-// 			return
-// 		}
-
-// 		if params.Limit == 0 || params.Limit > config.DefaultMessagesLimit {
-// 			params.Limit = config.DefaultMessagesLimit
-// 		}
-
-// 		item, err := s.storage.Postgres().RoomGetSingle(
-// 			context.Background(),
-// 			&models.GetSingleRoom{
-// 				Id: params.RoomId,
-// 			},
-// 		)
-// 		if err != nil {
-// 			event.Socket.Emit("error", "Internal server error")
-// 			return
-// 		}
-
-// 		// _, err = s.storage.Postgres().RoomMemberCreate(
-// 		// 	context.Background(),
-// 		// 	&models.CreateRoomMember{
-// 		// 		RoomId: params.RoomId,
-// 		// 		RowId:  params.RowId,
-// 		// 	},
-// 		// )
-// 		// if err != nil {
-// 		// 	event.Socket.Emit("error", "Internal server error")
-// 		// 	return
-// 		// }
-
-// 		// event.Socket.Join(item.Id)
-// 		// event.Socket.Emit("room joined", item)
-
-// 		messageHistory, err := s.storage.Postgres().MessageGetList(
-// 			context.Background(),
-// 			&models.GetListMessageReq{
-// 				RoomId: item.Id,
-// 				Offset: params.Offset,
-// 				Limit:  params.Limit,
-// 			},
-// 		)
-// 		if err != nil {
-// 			event.Socket.Emit("error", "Internal server error")
-// 			return
-// 		}
-
-// 		if len(messageHistory.Messages) > 0 {
-// 			event.Socket.Emit("room history", messageHistory.Messages)
-// 		}
-
-// 		items, err := s.storage.Postgres().RoomGetList(
-// 			context.Background(),
-// 			&models.GetListRoomReq{
-// 				RowId:  params.RowId,
-// 				Offset: params.Offset,
-// 				Limit:  params.Limit,
-// 			},
-// 		)
-// 		if err != nil {
-// 			event.Socket.Emit("error", "Internal server error")
-// 			return
-// 		}
-
-// 		event.Socket.Emit("rooms list", items.Rooms)
-// 	}
-// }
-
-// func (s *socket) onCreateRoom(event *socketio.EventPayload) {
-// 	if request, ok := event.Data[0].(map[string]any); ok {
-// 		s.log.Info("Create room->", request)
-// 		params := utils.ConvertMaptoStruct[models.CreateRoom](request)
-
-// 		id, err := s.storage.Postgres().RoomExists(
-// 			context.Background(),
-// 			&models.ExistsRoom{
-// 				Type:      params.Type,
-// 				ProjectId: params.ProjectId,
-// 				RowId:     params.RowId,
-// 				ToRowId:   params.ToRowId,
-// 				ItemId:    params.ItemId,
-// 			},
-// 		)
-// 		if err == nil && len(id) != 0 {
-// 			_, _ = s.storage.Postgres().RoomMemberCreate(
-// 				context.Background(),
-// 				&models.CreateRoomMember{
-// 					RoomId: id,
-// 					RowId:  params.RowId,
-// 					ToName: params.ToName,
-// 				},
-// 			)
-// 			event.Socket.Emit("check room", id)
-
-// 			items, err := s.storage.Postgres().RoomGetList(
-// 				context.Background(),
-// 				&models.GetListRoomReq{
-// 					RowId:  params.RowId,
-// 					Offset: 0,
-// 					Limit:  config.DefaultRoomsLimit,
-// 				},
-// 			)
-// 			if err != nil {
-// 				event.Socket.Emit("error", "Internal server error")
-// 				return
-// 			}
-
-// 			event.Socket.Emit("rooms list", items.Rooms)
-
-// 			return
-// 		}
-
-// 		room, err := s.storage.Postgres().RoomCreate(
-// 			context.Background(),
-// 			&params,
-// 		)
-// 		if err != nil {
-// 			event.Socket.Emit("error", "Internal server error")
-// 			return
-// 		}
-
-// 		_, err = s.storage.Postgres().RoomMemberCreate(
-// 			context.Background(),
-// 			&models.CreateRoomMember{
-// 				RoomId: room.Id,
-// 				RowId:  params.RowId,
-// 				ToName: params.ToName,
-// 			},
-// 		)
-// 		if err != nil {
-// 			event.Socket.Emit("error", "Internal server error")
-// 			return
-// 		}
-
-// 		if params.ToRowId != "" && params.FromName != "" {
-// 			_, err = s.storage.Postgres().RoomMemberCreate(
-// 				context.Background(),
-// 				&models.CreateRoomMember{
-// 					RoomId: room.Id,
-// 					RowId:  params.ToRowId,
-// 					ToName: params.FromName,
-// 				},
-// 			)
-// 			if err != nil {
-// 				event.Socket.Emit("error", "Internal server error")
-// 				return
-// 			}
-// 		}
-
-// 		items, err := s.storage.Postgres().RoomGetList(
-// 			context.Background(),
-// 			&models.GetListRoomReq{
-// 				RowId:  params.RowId,
-// 				Offset: 0,
-// 				Limit:  config.DefaultRoomsLimit,
-// 			},
-// 		)
-// 		if err != nil {
-// 			event.Socket.Emit("error", "Internal server error")
-// 			return
-// 		}
-
-// 		event.Socket.Emit("rooms list", items.Rooms)
-// 	}
-// }
-
-// func (s *socket) onChatMessage(event *socketio.EventPayload) {
-// 	if request, ok := event.Data[0].(map[string]any); ok {
-// 		params := utils.ConvertMaptoStruct[models.ChatMessage](request)
-
-// 		message, err := s.storage.Postgres().MessageCreate(
-// 			context.Background(),
-// 			&models.CreateMessage{
-// 				RoomId:  params.RoomId,
-// 				Message: params.Content,
-// 				From:    params.From,
-// 				Type:    params.Type,
-// 				File:    params.File,
-// 			},
-// 		)
-// 		if err != nil {
-// 			event.Socket.Emit("error", "Internal server error")
-// 			return
-// 		}
-
-// 		members, err := s.storage.Postgres().RoomMembersByRoomId(
-// 			context.Background(),
-// 			params.RoomId,
-// 		)
-// 		if err == nil {
-// 			s.log.Info("Inside->", members)
-// 			for _, m := range members {
-// 				items, err := s.storage.Postgres().RoomGetList(
-// 					context.Background(),
-// 					&models.GetListRoomReq{
-// 						RowId:  m.RowId,
-// 						Offset: 0,
-// 						Limit:  config.DefaultRoomsLimit,
-// 					},
-// 				)
-// 				if err != nil {
-// 					event.Socket.Emit("error", "Internal server error")
-// 					return
-// 				}
-
-// 				s.log.Info("Emitting->", m.RowId)
-// 				s.io.To(m.RowId).Emit("chat message", message)
-// 				s.io.To(m.RowId).Emit("rooms list", items.Rooms)
-// 			}
-// 		}
-// 	}
-// }
-
-// func (s *socket) onRoomsList(event *socketio.EventPayload) {
-// 	if request, ok := event.Data[0].(map[string]any); ok {
-// 		params := utils.ConvertMaptoStruct[models.RoomsList](request)
-
-// 		if params.Limit == 0 || params.Limit > config.DefaultRoomsLimit {
-// 			params.Limit = config.DefaultRoomsLimit
-// 		}
-
-// 		items, err := s.storage.Postgres().RoomGetList(
-// 			context.Background(),
-// 			&models.GetListRoomReq{
-// 				RowId:  params.RowId,
-// 				Offset: params.Offset,
-// 				Limit:  params.Limit,
-// 			},
-// 		)
-// 		if err != nil {
-// 			event.Socket.Emit("error", "Internal server error")
-// 			return
-// 		}
-
-// 		event.Socket.Emit("rooms list", items.Rooms)
-// 	}
-// }
-
 package handlers
 
 import (
@@ -329,7 +18,7 @@ type socket struct {
 	io        *socketio.Io
 	storage   storage.StorageI
 	log       *logger.Logger
-	socketRow map[string]string // socketID(pointer) -> rowId
+	socketRow map[string]string
 }
 
 func NewSocketHandler(io *socketio.Io, strg storage.StorageI, log *logger.Logger) {
@@ -404,8 +93,14 @@ func (s *socket) onConnection(event *socketio.EventPayload) {
 		"last_seen_at": now,
 	})
 
+	reqType := ""
+	if typeVal, ok := reqMap["type"].(string); ok {
+		reqType = typeVal
+	}
+
 	items, err := s.storage.Postgres().RoomGetList(ctx, &models.GetListRoomReq{
 		RowId:  params.RowId,
+		Type:   reqType,
 		Offset: params.Offset,
 		Limit:  params.Limit,
 	})
@@ -455,8 +150,14 @@ func (s *socket) onCreateRoom(event *socketio.EventPayload) {
 		})
 		event.Socket.Emit("check room", id)
 
+		reqType := ""
+		if typeVal, ok := reqMap["type"].(string); ok {
+			reqType = typeVal
+		}
+
 		items, err := s.storage.Postgres().RoomGetList(ctx, &models.GetListRoomReq{
 			RowId:  params.RowId,
+			Type:   reqType,
 			Offset: params.Offset,
 			Limit:  params.Limit,
 		})
@@ -498,8 +199,14 @@ func (s *socket) onCreateRoom(event *socketio.EventPayload) {
 		}
 	}
 
+	reqType := ""
+	if typeVal, ok := reqMap["type"].(string); ok {
+		reqType = typeVal
+	}
+
 	items, err := s.storage.Postgres().RoomGetList(ctx, &models.GetListRoomReq{
 		RowId:  params.RowId,
+		Type:   reqType,
 		Offset: params.Offset,
 		Limit:  params.Limit,
 	})
@@ -565,8 +272,14 @@ func (s *socket) onJoinRoom(event *socketio.EventPayload) {
 		event.Socket.Emit("room history", messageHistory.Messages)
 	}
 
+	reqType := ""
+	if typeVal, ok := reqMap["type"].(string); ok {
+		reqType = typeVal
+	}
+
 	items, err := s.storage.Postgres().RoomGetList(ctx, &models.GetListRoomReq{
 		RowId:  params.RowId,
+		Type:   reqType,
 		Offset: params.Offset,
 		Limit:  params.Limit,
 	})
@@ -590,6 +303,16 @@ func (s *socket) onRoomsList(event *socketio.EventPayload) {
 		return
 	}
 
+	if params.Type == "" {
+		s.emitErr(event.Socket, sockErr{Function: "onRoomsList", Message: "type is required"})
+		return
+	}
+
+	if params.Type != "single" && params.Type != "group" {
+		s.emitErr(event.Socket, sockErr{Function: "onRoomsList", Message: "type must be 'single' or 'group'"})
+		return
+	}
+
 	if params.Limit == 0 || params.Limit > config.DefaultRoomsLimit {
 		params.Limit = config.DefaultRoomsLimit
 	}
@@ -599,6 +322,7 @@ func (s *socket) onRoomsList(event *socketio.EventPayload) {
 
 	items, err := s.storage.Postgres().RoomGetList(ctx, &models.GetListRoomReq{
 		RowId:  params.RowId,
+		Type:   params.Type,
 		Offset: params.Offset,
 		Limit:  params.Limit,
 	})
@@ -685,9 +409,15 @@ func (s *socket) onChatMessage(event *socketio.EventPayload) {
 
 	members, err := s.storage.Postgres().RoomMembersByRoomId(ctx, params.RoomId)
 	if err == nil {
+		reqType := ""
+		if typeVal, ok := reqMap["type"].(string); ok {
+			reqType = typeVal
+		}
+
 		for _, m := range members {
 			items, err := s.storage.Postgres().RoomGetList(ctx, &models.GetListRoomReq{
 				RowId:  m.RowId,
+				Type:   reqType,
 				Offset: params.Offset,
 				Limit:  params.Limit,
 			})
@@ -786,7 +516,7 @@ func (s *socket) onPresenceGet(event *socketio.EventPayload) {
 		return
 	}
 
-	event.Socket.Emit("presence.updated", pr) // {row_id, status, last_seen_at}
+	event.Socket.Emit("presence.updated", pr)
 }
 
 func (s *socket) onMessageRead(event *socketio.EventPayload) {
