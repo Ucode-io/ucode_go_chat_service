@@ -13,17 +13,24 @@ import (
 
 func (r *postgresRepo) RoomMemberCreate(ctx context.Context, req *models.CreateRoomMember) (*models.RoomMember, error) {
 	var (
-		res = &models.RoomMember{}
-		id  = uuid.NewString()
+		res        = &models.RoomMember{}
+		id         = uuid.NewString()
+		attributes []byte
 	)
+
+	if len(req.Attributes) == 0 {
+		attributes = []byte("{}")
+	} else {
+		attributes = req.Attributes
+	}
 
 	sqlStr, args, err := r.Db.Builder.
 		Insert("room_members").
-		Columns("id", "room_id", "row_id", "to_name", "to_row_id").
-		Values(id, req.RoomId, req.RowId, req.ToName, req.ToRowId).
+		Columns("id", "room_id", "row_id", "to_name", "to_row_id", "attributes").
+		Values(id, req.RoomId, req.RowId, req.ToName, req.ToRowId, attributes).
 		Suffix(`
 			ON CONFLICT (room_id, row_id) DO NOTHING 
-			RETURNING id, room_id, row_id, to_name, to_row_id, created_at, updated_at
+			RETURNING id, room_id, row_id, to_name, to_row_id, attributes, created_at, updated_at
 		`).
 		ToSql()
 	if err != nil {
@@ -36,6 +43,7 @@ func (r *postgresRepo) RoomMemberCreate(ctx context.Context, req *models.CreateR
 		&res.RowId,
 		&res.ToName,
 		&res.ToRowId,
+		&res.Attributes,
 		&CreatedAt,
 		&UpdatedAt,
 	)
@@ -54,7 +62,7 @@ func (r *postgresRepo) RoomMemberCreate(ctx context.Context, req *models.CreateR
 
 func (r *postgresRepo) RoomMembersByRoomId(ctx context.Context, roomId string) ([]*models.RoomMember, error) {
 	sqlStr, args, err := r.Db.Builder.
-		Select("row_id").
+		Select("id", "room_id", "row_id", "to_name", "to_row_id", "attributes", "created_at", "updated_at").
 		From("room_members").
 		Where(sq.Eq{"room_id": roomId}).
 		ToSql()
@@ -71,9 +79,21 @@ func (r *postgresRepo) RoomMembersByRoomId(ctx context.Context, roomId string) (
 	var res []*models.RoomMember
 	for rows.Next() {
 		rm := &models.RoomMember{}
-		if err := rows.Scan(&rm.RowId); err != nil {
+		var CreatedAt, UpdatedAt time.Time
+		if err := rows.Scan(
+			&rm.Id,
+			&rm.RoomId,
+			&rm.RowId,
+			&rm.ToName,
+			&rm.ToRowId,
+			&rm.Attributes,
+			&CreatedAt,
+			&UpdatedAt,
+		); err != nil {
 			return nil, err
 		}
+		rm.CreatedAt = CreatedAt.Format(time.RFC1123)
+		rm.UpdatedAt = UpdatedAt.Format(time.RFC1123)
 		res = append(res, rm)
 	}
 

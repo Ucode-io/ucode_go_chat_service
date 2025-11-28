@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"sync"
 	"time"
 	"ucode/ucode_go_chat_service/config"
@@ -142,11 +143,16 @@ func (s *socket) onCreateRoom(event *socketio.EventPayload) {
 		ItemId:    params.ItemId,
 	})
 	if err == nil && id != "" {
+		memberAttributes := extractAttributes(reqMap, "member_attributes")
+		if len(memberAttributes) == 0 {
+			memberAttributes = extractAttributes(reqMap, "attributes")
+		}
 		_, _ = s.storage.Postgres().RoomMemberCreate(ctx, &models.CreateRoomMember{
-			RoomId:  id,
-			RowId:   params.RowId,
-			ToName:  params.ToName,
-			ToRowId: params.ToRowId,
+			RoomId:     id,
+			RowId:      params.RowId,
+			ToName:     params.ToName,
+			ToRowId:    params.ToRowId,
+			Attributes: memberAttributes,
 		})
 		event.Socket.Emit("check room", id)
 
@@ -173,11 +179,16 @@ func (s *socket) onCreateRoom(event *socketio.EventPayload) {
 		return
 	}
 
+	memberAttributes := extractAttributes(reqMap, "member_attributes")
+	if len(memberAttributes) == 0 {
+		memberAttributes = extractAttributes(reqMap, "attributes")
+	}
 	_, err = s.storage.Postgres().RoomMemberCreate(ctx, &models.CreateRoomMember{
-		RoomId:  room.Id,
-		RowId:   params.RowId,
-		ToName:  params.ToName,
-		ToRowId: params.ToRowId,
+		RoomId:     room.Id,
+		RowId:      params.RowId,
+		ToName:     params.ToName,
+		ToRowId:    params.ToRowId,
+		Attributes: memberAttributes,
 	})
 	if err != nil {
 		s.emitErr(event.Socket, sockErr{Function: "onCreateRoom", Message: "failed to add member", Error: err.Error(), Request: reqMap})
@@ -187,11 +198,13 @@ func (s *socket) onCreateRoom(event *socketio.EventPayload) {
 	toRowId := cast.ToString(params.ToRowId)
 
 	if params.ToRowId != "" && params.FromName != "" && params.Type == "single" {
+		toMemberAttributes := extractAttributes(reqMap, "to_member_attributes")
 		_, err = s.storage.Postgres().RoomMemberCreate(ctx, &models.CreateRoomMember{
-			RoomId:  room.Id,
-			RowId:   toRowId,
-			ToName:  params.FromName,
-			ToRowId: params.RowId,
+			RoomId:     room.Id,
+			RowId:      toRowId,
+			ToName:     params.FromName,
+			ToRowId:    params.RowId,
+			Attributes: toMemberAttributes,
 		})
 		if err != nil {
 			s.emitErr(event.Socket, sockErr{Function: "onCreateRoom", Message: "failed to add member 2", Error: err.Error(), Request: reqMap})
@@ -250,11 +263,13 @@ func (s *socket) onJoinRoom(event *socketio.EventPayload) {
 		return
 	}
 
+	memberAttributes := extractAttributes(reqMap, "attributes")
 	_, _ = s.storage.Postgres().RoomMemberCreate(ctx, &models.CreateRoomMember{
-		RoomId:  item.Id,
-		RowId:   params.RowId,
-		ToName:  params.ToName,
-		ToRowId: params.ToRowId,
+		RoomId:     item.Id,
+		RowId:      params.RowId,
+		ToName:     params.ToName,
+		ToRowId:    params.ToRowId,
+		Attributes: memberAttributes,
 	})
 
 	event.Socket.Join(item.Id)
@@ -619,4 +634,24 @@ func (s *socket) onDisconnection(event *socketio.EventPayload) {
 		"status":       "offline",
 		"last_seen_at": now,
 	})
+}
+
+func extractAttributes(reqMap map[string]any, key string) json.RawMessage {
+	if attrs, ok := reqMap[key]; ok {
+		if attrsMap, ok := attrs.(map[string]any); ok {
+			data, err := json.Marshal(attrsMap)
+			if err == nil {
+				return data
+			}
+		} else if attrsStr, ok := attrs.(string); ok {
+			if json.Valid([]byte(attrsStr)) {
+				return json.RawMessage(attrsStr)
+			}
+		} else if attrsBytes, ok := attrs.([]byte); ok {
+			if json.Valid(attrsBytes) {
+				return json.RawMessage(attrsBytes)
+			}
+		}
+	}
+	return json.RawMessage("{}")
 }

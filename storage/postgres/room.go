@@ -14,16 +14,23 @@ import (
 
 func (r *postgresRepo) RoomCreate(ctx context.Context, req *models.CreateRoom) (*models.Room, error) {
 	var (
-		res    = &models.Room{}
-		id     = uuid.NewString()
-		itemId sql.NullString
+		res        = &models.Room{}
+		id         = uuid.NewString()
+		itemId     sql.NullString
+		attributes []byte
 	)
+
+	if len(req.Attributes) == 0 {
+		attributes = []byte("{}")
+	} else {
+		attributes = req.Attributes
+	}
 
 	sqlStr, args, err := r.Db.Builder.
 		Insert("rooms").
-		Columns("id", "name", "type", "project_id", "item_id").
-		Values(id, req.Name, req.Type, req.ProjectId, req.ItemId).
-		Suffix("RETURNING id, name, type, project_id, item_id, created_at, updated_at").
+		Columns("id", "name", "type", "project_id", "item_id", "attributes").
+		Values(id, req.Name, req.Type, req.ProjectId, req.ItemId, attributes).
+		Suffix("RETURNING id, name, type, project_id, item_id, attributes, created_at, updated_at").
 		ToSql()
 	if err != nil {
 		return nil, HandleDatabaseError(err, r.Log, "RoomCreate: build sql")
@@ -35,6 +42,7 @@ func (r *postgresRepo) RoomCreate(ctx context.Context, req *models.CreateRoom) (
 		&res.Type,
 		&res.ProjectId,
 		&itemId,
+		&res.Attributes,
 		&CreatedAt,
 		&UpdatedAt,
 	)
@@ -53,7 +61,7 @@ func (r *postgresRepo) RoomGetSingle(ctx context.Context, req *models.GetSingleR
 	room := &models.Room{}
 
 	sqlStr, args, err := r.Db.Builder.
-		Select("r.id", "r.name", "r.type", "r.project_id", "r.item_id", "r.created_at", "r.updated_at").
+		Select("r.id", "r.name", "r.type", "r.project_id", "r.item_id", "r.attributes", "r.created_at", "r.updated_at").
 		From("rooms r").
 		Where(sq.Eq{"r.id": req.Id}).
 		ToSql()
@@ -67,6 +75,7 @@ func (r *postgresRepo) RoomGetSingle(ctx context.Context, req *models.GetSingleR
 		&room.Type,
 		&room.ProjectId,
 		&room.ItemId,
+		&room.Attributes,
 		&CreatedAt,
 		&UpdatedAt,
 	)
@@ -90,6 +99,7 @@ func (r *postgresRepo) RoomGetList(ctx context.Context, req *models.GetListRoomR
 			"r.type",
 			"r.project_id",
 			"r.item_id",
+			"r.attributes",
 			"rm.to_name",
 			"rm.to_row_id",
 			"r.created_at",
@@ -155,6 +165,7 @@ func (r *postgresRepo) RoomGetList(ctx context.Context, req *models.GetListRoomR
 			&room.Type,
 			&room.ProjectId,
 			&itemId,
+			&room.Attributes,
 			&room.ToName,
 			&toRowId,
 			&CreatedAt,
