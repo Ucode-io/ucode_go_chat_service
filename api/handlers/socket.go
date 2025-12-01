@@ -117,7 +117,7 @@ func (s *socket) onConnection(event *socketio.EventPayload) {
 func (s *socket) onCreateRoom(event *socketio.EventPayload) {
 	reqMap, ok := event.Data[0].(map[string]any)
 	if !ok {
-		err := "invalid payload"
+		err := "invalid payload" 
 		s.emitErr(event.Socket, sockErr{Function: "onCreateRoom", Message: err, Error: err})
 		return
 	}
