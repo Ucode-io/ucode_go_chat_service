@@ -111,7 +111,7 @@ func (s *socket) onConnection(event *socketio.EventPayload) {
 		return
 	}
 
-	event.Socket.Emit("rooms list", items.Rooms)
+	event.Socket.Emit("rooms list", items.Rooms) 
 }
 
 func (s *socket) onCreateRoom(event *socketio.EventPayload) {
