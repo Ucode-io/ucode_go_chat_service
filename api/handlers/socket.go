@@ -318,16 +318,6 @@ func (s *socket) onRoomsList(event *socketio.EventPayload) {
 		return
 	}
 
-	if params.Type == "" {
-		s.emitErr(event.Socket, sockErr{Function: "onRoomsList", Message: "type is required"})
-		return
-	}
-
-	if params.Type != "single" && params.Type != "group" {
-		s.emitErr(event.Socket, sockErr{Function: "onRoomsList", Message: "type must be 'single' or 'group'"})
-		return
-	}
-
 	if params.Limit == 0 || params.Limit > config.DefaultRoomsLimit {
 		params.Limit = config.DefaultRoomsLimit
 	}
