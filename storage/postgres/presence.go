@@ -49,7 +49,7 @@ func (r *postgresRepo) PresenceHeartbeat(ctx context.Context, req *models.Heartb
 		Columns("row_id", "status", "last_seen_at", "updated_at").
 		Values(req.RowId, "online", req.Now, req.Now).
 		Suffix(`
-			ON CONFLICT (row_id) DO UPDATE
+			ON CONFLICT (row_id, project_id) DO UPDATE
 			SET status = 'online',
 			    last_seen_at = EXCLUDED.last_seen_at,
 			    updated_at = EXCLUDED.updated_at
@@ -62,6 +62,7 @@ func (r *postgresRepo) PresenceHeartbeat(ctx context.Context, req *models.Heartb
 	if _, err := r.Db.Pg.Exec(ctx, sqlStr, args...); err != nil {
 		return HandleDatabaseError(err, r.Log, "PresenceHeartbeat: exec")
 	}
+
 	return nil
 }
 

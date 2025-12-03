@@ -59,7 +59,8 @@ type PresenceConnected struct {
 }
 
 type PresencePing struct {
-	RowId string `json:"row_id"`
+	RowId     string `json:"row_id"`
+	ProjectId string `json:"project_id"`
 }
 type PresenceGet struct {
 	RowId string `json:"row_id"`

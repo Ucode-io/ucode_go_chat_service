@@ -111,13 +111,13 @@ func (s *socket) onConnection(event *socketio.EventPayload) {
 		return
 	}
 
-	event.Socket.Emit("rooms list", items.Rooms) 
+	event.Socket.Emit("rooms list", items.Rooms)
 }
 
 func (s *socket) onCreateRoom(event *socketio.EventPayload) {
 	reqMap, ok := event.Data[0].(map[string]any)
 	if !ok {
-		err := "invalid payload" 
+		err := "invalid payload"
 		s.emitErr(event.Socket, sockErr{Function: "onCreateRoom", Message: err, Error: err})
 		return
 	}
@@ -487,7 +487,7 @@ func (s *socket) onPresencePing(event *socketio.EventPayload) {
 		return
 	}
 	params := utils.ConvertMaptoStruct[models.PresencePing](reqMap)
-	if params.RowId == "" {
+	if params.RowId == "" || params.ProjectId == "" {
 		return
 	}
 
@@ -497,14 +497,16 @@ func (s *socket) onPresencePing(event *socketio.EventPayload) {
 	now := time.Now().UTC()
 
 	_ = s.storage.Postgres().PresenceHeartbeat(ctx, &models.HeartbeatPresence{
-		RowId: params.RowId,
-		Now:   now,
+		ProjectId: params.ProjectId,
+		RowId:     params.RowId,
+		Now:       now,
 	})
 
 	s.io.Emit("presence.updated", map[string]any{
 		"row_id":       params.RowId,
 		"status":       "online",
 		"last_seen_at": now,
+		"project_id":   params.ProjectId,
 	})
 }
 

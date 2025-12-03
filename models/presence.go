@@ -15,8 +15,9 @@ type UpsertPresence struct {
 }
 
 type HeartbeatPresence struct {
-	RowId string
-	Now   time.Time
+	RowId     string
+	Now       time.Time
+	ProjectId string
 }
 
 type GetPresence struct {
